@@ -1,0 +1,13 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": ["https://baghharu.neerrn.com", "http://localhost:5173"],
+        "methods": ["PUT"],
+        "headers": ["content-type"]
+      },
+      "exposeHeaders": ["etag"],
+      "maxAgeSeconds": 600
+    }
+  ]
+}

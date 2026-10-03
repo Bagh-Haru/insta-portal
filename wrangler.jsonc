@@ -1,0 +1,53 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "insta-portal",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-09-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "baghharu.neerrn.com", "custom_domain": true }
+  ],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/media/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "insta-portal",
+      "database_id": "087a807f-e526-4c6c-8b77-56e9742e38c0",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "insta-portal-media"
+    }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "PUBLISH_QUEUE", "queue": "insta-portal-publishing" }
+    ],
+    "consumers": [
+      {
+        "queue": "insta-portal-publishing",
+        "max_batch_size": 5,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "insta-portal-publishing-dead"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["17 * * * *"]
+  },
+  "vars": {
+    "APP_ORIGIN": "https://baghharu.neerrn.com",
+    "MEDIA_BUCKET": "insta-portal-media",
+    "META_API_VERSION": "v26.0",
+    "MAX_VIDEO_BYTES": "209715200",
+    "MAX_IMAGE_BYTES": "8388608"
+  }
+}
