@@ -4,6 +4,10 @@ This is a private app for our class. Approved classmates sign in with Google, up
 
 The app is deployed on Cloudflare: [baghharu.neerrn.com](https://baghharu.neerrn.com). It uses Cloudflare D1 for app data, private R2 storage for uploads, and a Queue for publishing.
 
+In **Create**, upload your finished photo or video. Use **@ Mention people** for Stories or **Tag people** for feed media. The mention dialog supports dragging and keyboard positioning. Collaborators, Reel cover frames, feed sharing, carousel reordering, drafts and upload recovery are retained. There is no image/video editor or Studio music.
+
+Instagram catalog music is supported by Meta's API for **Reels only**, through Facebook Login and a linked Facebook Page. The class Facebook connection is active. Meta returns a limited catalog, so some songs from Instagram are unavailable. Finish videos in Instagram Edits before uploading. Exported music may appear as original audio. To reconnect, fill `META_FACEBOOK_APP_ID`, `META_FACEBOOK_APP_SECRET`, `META_FACEBOOK_USER_ACCESS_TOKEN` and `META_FACEBOOK_BUSINESS_ID` in `.dev.vars`, then run `npm run meta:connect` with Node 22. Renew before 4 December 2026. Credentials are not entered through the website. Post, Story and carousel music, exact song-section selection and mention font/size controls are not documented API capabilities.
+
 ## Run on your computer
 
 You need Node.js 22 and npm.
@@ -33,3 +37,5 @@ There are limits to stop too many requests:
 - Admins can add 30 classmates per hour. First admin setup allows 5 tries per hour.
 
 If you reach a limit, wait and try again later. Please do not keep clicking or guess setup codes.
+
+Launch checks (6 October 2026): 80 app tests, 13 setup tests and nine browser tests pass. Live catalog search, preview playback and upload guidance pass. Publishing Queue, dead-letter Queue and two-minute cron are attached; no publishing jobs are stuck. Worker version: `5a62f355-7239-44f2-a217-ffc7a17ca070`. Existing posts were unchanged. Final published audio attribution was not tested; previous real uploads were verified with unpublished containers.

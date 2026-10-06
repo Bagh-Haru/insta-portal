@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { registerAuthRoutes } from "./auth";
 import { registerPublicationRoutes } from "./publications";
+import { registerCreativeRoutes } from "./creative";
+import { registerMetaConnection } from "./meta-connection";
 import { consumeQueue, runScheduled } from "./publishing";
 import { constantTimeEqual, getPrincipal, HttpError, jsonError, recordAudit, requireAdmin, requireCsrf, requirePrincipal, requireRateLimit } from "./security";
 import type { Env, PublishJob } from "./types";
@@ -46,6 +48,8 @@ app.get("/api/session", async (c) => {
 
 registerAuthRoutes(app);
 registerPublicationRoutes(app);
+registerCreativeRoutes(app);
+registerMetaConnection(app);
 
 app.post("/api/bootstrap", async (c) => {
   const principal = await getPrincipal(c);

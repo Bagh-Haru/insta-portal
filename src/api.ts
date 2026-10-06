@@ -39,6 +39,7 @@ export async function uploadFile(url: string, file: File, onProgress: (loaded: n
   await new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("PUT", url);
+    request.timeout = 15 * 60 * 1000;
     request.setRequestHeader("Content-Type", file.type);
     request.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress(event.loaded);
@@ -48,6 +49,7 @@ export async function uploadFile(url: string, file: File, onProgress: (loaded: n
       else reject(new ApiError("The media upload did not finish. Request a new upload and try again.", request.status));
     };
     request.onerror = () => reject(new ApiError("Network error while uploading. Check your connection and retry.", 0));
+    request.ontimeout = () => reject(new ApiError("The upload timed out. Check your connection and retry.", 0));
     request.onabort = () => reject(new ApiError("The upload was cancelled.", 0));
     request.send(file);
   });

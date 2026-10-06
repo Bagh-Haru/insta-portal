@@ -251,7 +251,7 @@ describe("session and authorization controls", () => {
     expect(response.status).toBe(404);
   });
 
-  it("refuses a second submission request with the same idempotency key", async () => {
+  it("returns the existing submission when a successful response was lost", async () => {
     const user = await addUser("retry");
     const idempotencyKey = crypto.randomUUID();
     const request = {
@@ -270,7 +270,8 @@ describe("session and authorization controls", () => {
        VALUES ('existing-publication', ?, 'post', ?, 'queued', ?, ?, 1)`,
     ).bind(user.id, request.caption, idempotencyKey, requestHash).run();
     const response = await call("/api/publications", { method: "POST", user, csrf: user.csrfToken, body: request });
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ id: "existing-publication", status: "queued", uploads: [] });
     const count = await testEnv.DB.prepare("SELECT COUNT(*) AS count FROM publications WHERE created_by = ?").bind(user.id).first<{ count: number }>();
     expect(count?.count).toBe(1);
   });
@@ -376,6 +377,104 @@ describe("media capabilities and upload finalization", () => {
     const stable = await testEnv.MEDIA.get(row!.object_key);
     expect(stable).not.toBeNull();
     expect(new Uint8Array(await stable!.arrayBuffer())).toEqual(imageBytes);
+  });
+
+  it.each(["", "/complete"])("protects per-file uploads%s with ownership and CSRF", async (suffix) => {
+    const owner = await addUser("file-owner");
+    const viewer = await addUser("file-viewer");
+    await addPublication(owner.id, "file-private");
+    const path = `/api/publications/file-private/uploads/media-file-private${suffix}`;
+    expect((await call(path, { method: "POST", user: owner, body: {} })).status).toBe(403);
+    expect((await call(path, { method: "POST", user: viewer, csrf: viewer.csrfToken, body: {} })).status).toBe(404);
+  });
+
+  it("keeps an existing uploaded file when renewing permission", async () => {
+    const user = await addUser("keep-file");
+    await addPublication(user.id, "keep-file");
+    const key = `staging/${user.id}/keep-file/source`;
+    await testEnv.MEDIA.put(key, imageBytes, { httpMetadata: { contentType: "image/jpeg" } });
+    await testEnv.DB.prepare("UPDATE publication_media SET upload_url_expires_at = 1 WHERE publication_id = 'keep-file'").run();
+    const response = await call("/api/publications/keep-file/uploads/media-keep-file", { method: "POST", user, csrf: user.csrfToken, body: {} });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ url: null, uploaded: true });
+    const expiry = await testEnv.DB.prepare("SELECT upload_url_expires_at FROM publication_media WHERE publication_id = 'keep-file'").first<{ upload_url_expires_at: number }>();
+    expect(expiry!.upload_url_expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000));
+  });
+
+  it("can finalize a slow upload after its signed URL expires and scheduled cleanup runs", async () => {
+    const user = await addUser("slow-file");
+    await addPublication(user.id, "slow-file");
+    const key = `staging/${user.id}/slow-file/source`;
+    await testEnv.MEDIA.put(key, imageBytes, { httpMetadata: { contentType: "image/jpeg" } });
+    await testEnv.DB.prepare("UPDATE publication_media SET upload_url_expires_at = 1 WHERE publication_id = 'slow-file'").run();
+    await runScheduled(testEnv);
+    const response = await call("/api/publications/slow-file/uploads/media-slow-file/complete", { method: "POST", user, csrf: user.csrfToken, body: {} });
+    expect(response.status).toBe(200);
+    const repeat = await call("/api/publications/slow-file/uploads/media-slow-file/complete", { method: "POST", user, csrf: user.csrfToken, body: {} });
+    expect(repeat.status).toBe(200);
+    expect(await testEnv.MEDIA.head(key)).toBeNull();
+  });
+
+  it("cleans an expired staging file after the publication fails", async () => {
+    const user = await addUser("failed-staging");
+    await addPublication(user.id, "failed-staging");
+    const key = `staging/${user.id}/failed-staging/source`;
+    await testEnv.MEDIA.put(key, imageBytes, { httpMetadata: { contentType: "image/jpeg" } });
+    await testEnv.DB.prepare("UPDATE publication_media SET upload_url_expires_at = 1 WHERE publication_id = 'failed-staging'").run();
+    await testEnv.DB.prepare("UPDATE publications SET status = 'failed' WHERE id = 'failed-staging'").run();
+    await runScheduled(testEnv);
+    expect(await testEnv.MEDIA.head(key)).toBeNull();
+  });
+
+  it("resumes a draft with a finalized file without issuing another upload URL", async () => {
+    const user = await addUser("partial-file");
+    const body = { idempotencyKey: crypto.randomUUID(), type: "post", caption: "", media: [{ name: "photo.jpg", mimeType: "image/jpeg", sizeBytes: imageBytes.length }] };
+    const options = { method: "POST", user, csrf: user.csrfToken, body };
+    const first = await call("/api/publications", options);
+    const draft = await first.json() as { id: string; uploads: Array<{ mediaId: string }> };
+    const mediaId = draft.uploads[0].mediaId;
+    const row = await testEnv.DB.prepare("SELECT staging_key FROM publication_media WHERE id = ?").bind(mediaId).first<{ staging_key: string }>();
+    await testEnv.MEDIA.put(row!.staging_key, imageBytes, { httpMetadata: { contentType: "image/jpeg" } });
+    expect((await call(`/api/publications/${draft.id}/uploads/${mediaId}/complete`, { method: "POST", user, csrf: user.csrfToken, body: {} })).status).toBe(200);
+    const repeat = await call("/api/publications", options);
+    expect(repeat.status).toBe(200);
+    expect((await repeat.json() as { uploads: unknown[] }).uploads).toEqual([{ mediaId, url: null }]);
+  });
+
+  it("rejects Story videos over Instagram's 100 MB limit", async () => {
+    const user = await addUser("story-size");
+    const response = await call("/api/publications", { method: "POST", user, csrf: user.csrfToken,
+      body: { idempotencyKey: crypto.randomUUID(), type: "story", caption: "", media: [{ name: "story.mp4", mimeType: "video/mp4", sizeBytes: 100_000_000 + 1 }] } });
+    expect(response.status).toBe(413);
+  });
+
+  it("rejects photos above the conservative decimal 8 MB limit", async () => {
+    const user = await addUser("photo-size");
+    const response = await call("/api/publications", { method: "POST", user, csrf: user.csrfToken,
+      body: { idempotencyKey: crypto.randomUUID(), type: "post", caption: "", media: [{ name: "photo.jpg", mimeType: "image/jpeg", sizeBytes: 8_000_000 + 1 }] } });
+    expect(response.status).toBe(413);
+  });
+
+  it.each([
+    ["bytes=1-2", 206, [0xd8, 0xff], "bytes 1-2/4"],
+    ["bytes=2-", 206, [0xff, 0], "bytes 2-3/4"],
+    ["bytes=-2", 206, [0xff, 0], "bytes 2-3/4"],
+    ["bytes=1-999", 206, [0xd8, 0xff, 0], "bytes 1-3/4"],
+    ["bytes=8-9", 416, [], "bytes */4"],
+    ["bytes=-0", 416, [], "bytes */4"],
+  ] as const)("serves an authorized byte range %s", async (range, status, bytes, contentRange) => {
+    const user = await addUser("range-owner");
+    await addPublication(user.id, "range-file", "publishing");
+    const mediaId = crypto.randomUUID();
+    const expiry = Math.floor(Date.now() / 1000) + 3600;
+    await testEnv.DB.prepare("UPDATE publication_media SET id = ?, object_key = 'test/range-file', media_url_expires_at = ? WHERE publication_id = 'range-file'")
+      .bind(mediaId, expiry).run();
+    await testEnv.MEDIA.put("test/range-file", imageBytes, { httpMetadata: { contentType: "image/jpeg" } });
+    const token = await mediaCapability(testEnv, mediaId, expiry);
+    const response = await worker.fetch(new Request(`${origin}/media/${token}`, { headers: { Range: range } }), testEnv, createExecutionContext());
+    expect(response.status).toBe(status);
+    expect(response.headers.get("Content-Range")).toBe(contentRange);
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual(bytes);
   });
 
   it("does not call Instagram publish twice when duplicate queue messages arrive", async () => {

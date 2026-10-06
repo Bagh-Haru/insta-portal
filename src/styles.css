@@ -246,3 +246,106 @@ input::placeholder, textarea::placeholder { color: #83796e; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Creative composer */
+.composer-fields, .editor-tool-fields { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 24px; }
+.create-page .page-intro p { margin: 8px 0 0; }
+.upload-symbol { font-size: 32px; color: var(--accent); }
+.composer-media-list { display: grid; gap: 12px; }
+.composer-media-item { border: 1px solid var(--line); border-radius: 10px; background: var(--paper); padding: 12px; display: grid; gap: 10px; }
+.composer-media-item.active { border-color: var(--accent); }
+.media-select { background: transparent; border: 0; padding: 0; display: flex; gap: 12px; text-align: left; align-items: center; min-width: 0; }
+.media-select img, .media-select video { width: 56px; height: 68px; object-fit: cover; border-radius: 5px; background: #222; flex: 0 0 auto; }
+.media-select span { display: grid; gap: 5px; min-width: 0; }
+.media-select strong { font-size: 13px; overflow-wrap: anywhere; }
+.media-select small { color: var(--muted); font-size: 12px; }
+.media-item-actions { display: flex; gap: 8px; }
+.media-item-actions button { min-height: 40px; border: 1px solid var(--line); border-radius: 5px; background: var(--canvas); padding: 0 12px; }
+.media-item-actions button:first-child { color: var(--accent); flex: 1; text-align: left; }
+.alt-text-label { font-size: 12px; display: grid; gap: 6px; }
+.add-media { position: relative; cursor: pointer; }
+.add-media input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.composer-tip { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--accent-soft); }
+.composer-tip strong { font-size: 22px; color: var(--accent); }
+.composer-tip p { margin: 8px 0 0; font-size: 13px; }
+.composer-options { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 14px; }
+.composer-options summary { cursor: pointer; font-weight: 550; font-size: 14px; }
+.composer-options label, .editor-tool-fields label { display: grid; gap: 9px; font-size: 13px; }
+.composer-options[open] label { margin-top: 16px; }
+.composer-options p, .editor-tool-fields p { color: var(--muted); font-size: 12px; margin-bottom: 0; }
+.check-row { display: flex !important; align-items: center; gap: 10px; }
+.check-row input { width: 18px; height: 18px; accent-color: var(--accent); }
+.creative-composer .caption-field { display: grid; gap: 10px; }
+.music-heading { background: transparent; border: 0; padding: 0; display: flex; justify-content: space-between; gap: 10px; text-align: left; font-size: 14px; }
+.music-search { display: flex; gap: 8px; }
+.music-search input { min-width: 0; }
+.music-results { max-height: 340px; overflow-y: auto; display: grid; gap: 12px; }
+.music-track { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.music-track button { background: transparent; border: 0; text-align: left; display: grid; gap: 4px; }
+.music-track button[aria-pressed=true] { color: var(--accent); }
+.music-track small { color: var(--muted); }
+.music-track audio { width: 100%; height: 36px; }
+.music-setup-message { padding: 14px; background: var(--canvas); border-radius: 6px; font-size: 13px; }
+.creative-preview .preview-media { object-fit: contain; background: #171717; }
+.portrait-preview .preview-media { aspect-ratio: 9/16; }
+.preview-tag-label { display: inline-block; padding: 5px 9px; color: var(--accent); font-size: 12px; }
+.preview-pagination { display: flex; justify-content: center; gap: 8px; margin-top: 14px; }
+.preview-pagination button { min-width: 36px; min-height: 36px; border: 1px solid var(--line); border-radius: 50%; background: var(--paper); }
+.preview-pagination button[aria-pressed=true] { background: var(--accent); color: white; border-color: var(--accent); }
+.download-export { margin-top: 14px; width: 100%; }
+.saved-drafts { padding: 18px; margin-bottom: 24px; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; }
+.saved-drafts h2 { margin-bottom: 12px; }
+.saved-drafts p { font-size: 13px; margin: 0; }
+.draft-row { display: flex; border-bottom: 1px solid var(--line); gap: 12px; }
+.draft-row button { padding: 12px 0; background: transparent; border: 0; }
+.draft-row button:first-child { flex: 1; display: grid; gap: 5px; text-align: left; min-width: 0; }
+.draft-row strong { font-size: 13px; overflow-wrap: anywhere; }
+.draft-row small { color: var(--muted); font-size: 12px; }
+.meta-connection { display: grid; gap: 16px; }
+.meta-connection p { margin: 0; font-size: 13px; }
+.meta-connection details { border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.meta-connection summary { cursor: pointer; }
+.meta-connection details p, .meta-connection label { margin-top: 16px; }
+.meta-connection label { display: grid; gap: 8px; font-size: 13px; }
+.meta-connection code { display: block; overflow-wrap: anywhere; font-size: 12px; margin-top: 8px; }
+
+/* Native people tags: preview only, no media renderer. */
+.tags-backdrop { position: fixed; inset: 0; z-index: 100; background: #151311b8; display: grid; place-items: center; padding: 24px; }
+.people-tags-dialog { width: min(900px, 100%); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; background: var(--paper); border-radius: 16px; overflow: hidden; }
+.tags-header, .tags-footer { padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; }
+.tags-header { border-bottom: 1px solid var(--line); }
+.tags-header h2 { margin: 0; font-size: 20px; }
+.tags-header p { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.tags-footer { border-top: 1px solid var(--line); }
+.tags-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; overflow: auto; min-height: 0; }
+.tags-preview-panel { min-width: 0; background: var(--canvas); padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.tags-stage { position: relative; overflow: hidden; background: #111; border-radius: 10px; flex-shrink: 0; }
+.tags-media { width: 100%; height: 100%; position: relative; transform-origin: center; }
+.tags-media img, .tags-media video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.person-marker { position: absolute; transform: translate(-50%, -50%); max-width: 90%; overflow-wrap: anywhere; border: 0; border-radius: 6px; padding: 8px 12px; background: #202020ee; color: #fff; font: 600 13px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; touch-action: none; cursor: grab; box-shadow: 0 2px 8px #0003; }
+.person-marker.story-mention { background: #fff; color: #9136b4; font-weight: 800; text-transform: uppercase; letter-spacing: -.3px; }
+.person-marker.selected { outline: 2px solid #bd81d8; outline-offset: 2px; }
+.person-marker:active { cursor: grabbing; }
+.tags-controls { min-width: 0; padding: 20px; }
+.tags-controls form { display: grid; gap: 12px; }
+.tags-controls label { display: grid; gap: 8px; font-size: 13px; }
+.people-list { display: grid; gap: 6px; margin-top: 16px; }
+.person-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px; border-bottom: 1px solid var(--line); }
+.person-row .text-button { overflow-wrap: anywhere; text-align: left; min-width: 0; }
+.preview-tag-label { background: #f1edf5; color: #813397; font-weight: 700; border-radius: 6px; margin: 5px; }
+.meta-setup-steps { padding-left: 20px; margin: 12px 0; font-size: 13px; line-height: 1.7; }
+.meta-setup-steps li { margin-bottom: 12px; }
+.meta-setup-steps a { color: var(--accent); }
+@media (max-width: 720px) {
+  .tags-backdrop { padding: 0; }
+  .people-tags-dialog { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .tags-header, .tags-footer { padding: 14px 16px; }
+  .tags-body { grid-template-columns: minmax(0, 1fr); }
+  .tags-preview-panel { padding: 16px; }
+  .tags-stage { max-width: 320px; }
+  .tags-controls { padding: 16px; }
+  .creative-composer .form-actions { gap: 10px; }
+  .creative-composer .form-actions button { padding: 0 12px; }
+  .media-item-actions { flex-wrap: wrap; }
+  .media-select strong { max-width: 230px; }
+}

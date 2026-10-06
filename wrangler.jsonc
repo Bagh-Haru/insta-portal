@@ -41,7 +41,7 @@
     ]
   },
   "triggers": {
-    "crons": ["17 * * * *"]
+    "crons": ["*/2 * * * *"]
   },
   "vars": {
     "APP_ORIGIN": "https://baghharu.neerrn.com",

@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { api, getSession, uploadFile } from "./api";
+import { useEffect, useState } from "react";
+import { api, getSession } from "./api";
+import CreatePublication from "./CreatePublication";
+import MetaConnection from "./MetaConnection";
 import type { ApiSession, Publication, PublicationType } from "./types";
 
 type Page = "dashboard" | "create" | "submissions" | "admin";
@@ -26,6 +28,7 @@ function App() {
   const [publications, setPublications] = useState<Publication[]>([]);
   const [publicationsLoading, setPublicationsLoading] = useState(true);
   const [pendingBootstrap, setPendingBootstrap] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
 
   const refreshSession = async () => {
     try {
@@ -73,7 +76,8 @@ function App() {
     return () => window.clearInterval(timer);
   }, [session, pendingBootstrap, publications]);
 
-  const navigate = (nextPage: Page) => {
+  const navigate = (nextPage: Page, completed = false) => {
+    if (uploadBusy && !completed) { setError("Your upload is still running. Wait until it is received before leaving."); return; }
     const nextPath = nextPage === "dashboard" ? "/" : nextPage === "create" ? "/new" : nextPage === "submissions" ? "/submissions" : "/admin";
     window.history.pushState({}, "", nextPath);
     setPage(nextPage);
@@ -109,14 +113,14 @@ function App() {
           <NavButton current={page === "submissions"} onClick={() => navigate("submissions")} icon="grid">My posts</NavButton>
           {user.role === "admin" && <NavButton current={page === "admin"} onClick={() => navigate("admin")} icon="settings">Admin</NavButton>}
         </nav>
-        <div className="header-user"><span className="avatar" title={user.email}>{initials(user.name)}</span><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={() => void logout()}><Icon name="logout" /></button></div>
+        <div className="header-user"><span className="avatar" title={user.email}>{initials(user.name)}</span><button className="icon-button" aria-label="Sign out" title="Sign out" disabled={uploadBusy} onClick={() => void logout()}><Icon name="logout" /></button></div>
       </header>
       <main className="main-area">
         <div className="content-wrap">
           {error && <div className="notice notice-error" role="alert">{error}<button onClick={() => setError("")} aria-label="Dismiss">×</button></div>}
           {notice && <div className="notice notice-success" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
           {page === "dashboard" && <Dashboard publications={publications} loading={publicationsLoading} onNavigate={navigate} />}
-          {page === "create" && <CreatePublication onComplete={(message) => { navigate("submissions"); setNotice(message); void api<{ items: Publication[] }>("/api/publications?limit=20").then((data) => setPublications(data.items ?? [])).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not refresh your posts.")); }} />}
+          {page === "create" && <CreatePublication owner={user.id} onBusyChange={setUploadBusy} onComplete={(message) => { setUploadBusy(false); navigate("submissions", true); setNotice(message); void api<{ items: Publication[] }>("/api/publications?limit=20").then((data) => setPublications(data.items ?? [])).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not refresh your posts.")); }} />}
           {page === "submissions" && <Submissions publications={publications} loading={publicationsLoading} onCreate={() => navigate("create")} onRefresh={() => void api<{ items: Publication[] }>("/api/publications?limit=20").then((data) => setPublications(data.items ?? [])).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not refresh your posts."))} />}
           {page === "admin" && user.role === "admin" && <AdminPage />}
         </div>
@@ -214,70 +218,6 @@ function Submissions({ publications, loading, onRefresh, onCreate }: { publicati
   return <section className="page-section"><div className="page-intro heading-with-action"><h1>My posts<span className="heading-count">{publications.length}</span></h1><button className="secondary-button" onClick={onRefresh}>Refresh</button></div>{loading ? <p role="status" className="muted-copy">Loading posts…</p> : publications.length ? <PublicationList publications={publications} /> : <div className="empty-state"><Icon name="grid" /><h3>No posts yet</h3><button className="text-button" onClick={onCreate}>Create a post <Icon name="arrow" /></button></div>}</section>;
 }
 
-const fileRules: Record<PublicationType, { label: string; accept: string; min: number; max: number }> = {
-  post: { label: "One JPEG photo", accept: "image/jpeg", min: 1, max: 1 },
-  reel: { label: "One video", accept: "video/mp4,video/quicktime", min: 1, max: 1 },
-  story: { label: "One JPEG photo or video", accept: "image/jpeg,video/mp4,video/quicktime", min: 1, max: 1 },
-  carousel: { label: "2 to 10 JPEG photos or videos", accept: "image/jpeg,video/mp4,video/quicktime", min: 2, max: 10 },
-};
-
-function CreatePublication({ onComplete }: { onComplete: (message: string) => void }) {
-  const [type, setType] = useState<PublicationType>("post");
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
-  const [files, setFiles] = useState<File[]>([]);
-  const [caption, setCaption] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [formError, setFormError] = useState("");
-  const rule = fileRules[type];
-  const objectUrls = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
-  useEffect(() => () => objectUrls.forEach((url) => URL.revokeObjectURL(url)), [objectUrls]);
-  useEffect(() => { setFiles([]); }, [type]);
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); setFormError("");
-    if (files.length < rule.min || files.length > rule.max) { setFormError(`Choose ${rule.label.toLowerCase()} before continuing.`); return; }
-    if (files.some((file) => file.size > (file.type.startsWith("video/") ? 200 : 8) * 1024 * 1024)) { setFormError("Each photo must be 8 MB or smaller and each video 200 MB or smaller."); return; }
-    if (files.reduce((total, file) => total + file.size, 0) > 400 * 1024 * 1024) { setFormError("The selected files exceed the 400 MB total upload limit."); return; }
-    setBusy(true); setProgress(0);
-    try {
-      const draft = await api<{ id: string; uploads: Array<{ url: string; mediaId: string }> }>("/api/publications", {
-        method: "POST",
-        body: JSON.stringify({ idempotencyKey, type, caption: type === "story" ? "" : caption, media: files.map((file) => ({ name: file.name, mimeType: file.type, sizeBytes: file.size })) }),
-      });
-      let completed = 0;
-      const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
-      for (let index = 0; index < files.length; index++) {
-        const beforeFile = completed;
-        await uploadFile(draft.uploads[index].url, files[index], (loaded) => setProgress(Math.min(99, Math.round(((beforeFile + loaded) / totalBytes) * 100))));
-        completed += files[index].size;
-      }
-      await api(`/api/publications/${encodeURIComponent(draft.id)}/complete`, { method: "POST", body: JSON.stringify({ mediaIds: draft.uploads.map((upload) => upload.mediaId) }) });
-      setProgress(100);
-      onComplete("Submitted to Instagram.");
-    } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "The publication could not be submitted.");
-    } finally { setBusy(false); }
-  };
-
-  return <section className="page-section create-page"><div className="page-intro"><h1>New post</h1></div>
-    <form className="create-layout" onSubmit={(event) => void submit(event)}>
-      <div className="form-column">
-        <fieldset className="type-fieldset" disabled={busy}><legend className="field-label">Format</legend><div className="type-options">{(["post", "reel", "story", "carousel"] as PublicationType[]).map((item) => <button type="button" key={item} aria-pressed={type === item} className={`type-option${type === item ? " selected" : ""}`} onClick={() => { setType(item); setIdempotencyKey(crypto.randomUUID()); }}><Icon name={item === "post" ? "image" : item} />{typeNames[item]}</button>)}</div></fieldset>
-        <div className="media-field"><span className="field-label">{type === "post" ? "Photo" : type === "reel" ? "Video" : "Photos & videos"}</span><label className={`dropzone${files.length ? " has-files" : ""}`}><input aria-label="Choose media" type="file" accept={rule.accept} multiple={rule.max > 1} onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => { const chosen = Array.from(event.target.files ?? []); setFiles(chosen); setIdempotencyKey(crypto.randomUUID()); setFormError(""); }} disabled={busy} /><Icon name="upload" /><strong>{files.length ? `${files.length} selected · replace` : "Select files"}</strong><small>{rule.label}</small></label>
-          <p className="field-hint">{type === "post" ? "JPEG up to 8 MB" : type === "reel" ? "MP4 / MOV up to 200 MB" : "JPEG up to 8 MB · MP4 / MOV up to 200 MB"}</p>
-          {files.length > 0 && <div className="selected-files">{files.map((file, index) => <div className="selected-file" key={`${file.name}-${index}`}>{file.type.startsWith("image/") ? <img src={objectUrls[index]} alt="" /> : <video src={objectUrls[index]} aria-label={`Preview: ${file.name}`} muted /> }<span><strong>{file.name}</strong><small>{(file.size / (1024 * 1024)).toFixed(1)} MB</small></span><button type="button" className="remove-file" onClick={() => { setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); setIdempotencyKey(crypto.randomUUID()); }} disabled={busy} aria-label={`Remove ${file.name}`}>×</button></div>)}</div>}
-        </div>
-        {type !== "story" && <div className="caption-field"><div className="form-card-heading"><label className="field-label" htmlFor="caption">Caption <span className="optional-label">optional</span></label><span className="character-count">{caption.length}/2,200</span></div><textarea id="caption" className="caption-input" maxLength={2200} rows={4} placeholder="Write a caption" value={caption} onChange={(event) => { setCaption(event.target.value); setIdempotencyKey(crypto.randomUUID()); }} disabled={busy} /></div>}
-        {formError && <div className="notice notice-error" role="alert">{formError}</div>}
-        {busy && <div className="progress-wrap" role="status"><div className="progress-copy"><span>Uploading…</span><strong>{progress}%</strong></div><div className="progress-track"><span style={{ width: `${progress}%` }} /></div><small>Keep this page open.</small></div>}
-        <div className="form-actions"><span>Public on Instagram</span><button className="primary-button" disabled={busy}>{busy ? "Publishing…" : "Publish"}<Icon name="arrow" /></button></div>
-      </div>
-      <aside className="preview-column" aria-label="Post preview"><span className="preview-label">Preview</span><div className="preview-card"><div className="preview-top"><img className="preview-avatar" src="/bagh.png" alt="" width="30" height="30" /><strong>Bagh Haru</strong></div>{files[0] ? files[0].type.startsWith("image/") ? <img className="preview-media" src={objectUrls[0]} alt="Post preview" /> : <video className="preview-media" src={objectUrls[0]} controls muted /> : <div className="preview-placeholder"><Icon name="image" /></div>}{files.length > 1 && <span className="preview-media-count">1 / {files.length}</span>}{type !== "story" && caption && <div className="preview-details"><p><strong>Bagh Haru</strong> {caption}</p></div>}</div></aside>
-    </form>
-  </section>;
-}
-
 type AdminUser = { id: string; email: string; name: string; role: "member" | "admin"; enabled: boolean; lastLoginAt: string | null };
 type AuditEvent = { id: number; actorEmail: string; action: string; targetType: string; createdAt: string };
 type IntegrationStatus = { instagramConfigured: boolean; googleConfigured: boolean; uploadsConfigured: boolean };
@@ -311,7 +251,7 @@ function AdminPage() {
     catch (caught) { setError(caught instanceof Error ? caught.message : "Could not update this account."); }
   };
   return <section className="page-section"><div className="page-intro"><h1>Admin</h1></div>{error && <div className="notice notice-error" role="alert">{error}</div>}{message && <div className="notice notice-success" role="status">{message}</div>}
-    <div className="admin-grid"><div className="form-card admin-users-card"><div className="form-card-heading"><div><h2>Access</h2></div><span className="member-count">{users.length} accounts</span></div><form className="add-user-form" onSubmit={(event) => void addUser(event)}><input className="text-input" aria-label="Classmate’s Google email" type="email" required placeholder="Google email" value={email} onChange={(event) => setEmail(event.target.value)} /><button className="primary-button" disabled={busy}>{busy ? "Adding…" : "Add"}</button></form><div className="admin-user-list">{users.map((user) => <div className="admin-user-row" key={user.id}><div className="avatar small-avatar">{initials(user.name || user.email)}</div><div className="user-details"><strong>{user.name || user.email}</strong><small>{user.email}</small></div><span className={`role-label ${user.role}`}>{user.role}</span><button className={`toggle-button${user.enabled ? " enabled" : ""}`} onClick={() => void toggleUser(user)} aria-label={`${user.enabled ? "Disable" : "Enable"} ${user.email}`} title={user.enabled ? "Disable access" : "Enable access"}><span /></button></div>)}{!users.length && <p className="muted-copy">No accounts</p>}</div></div>
+    <div className="admin-grid"><MetaConnection /><div className="form-card admin-users-card"><div className="form-card-heading"><div><h2>Access</h2></div><span className="member-count">{users.length} accounts</span></div><form className="add-user-form" onSubmit={(event) => void addUser(event)}><input className="text-input" aria-label="Classmate’s Google email" type="email" required placeholder="Google email" value={email} onChange={(event) => setEmail(event.target.value)} /><button className="primary-button" disabled={busy}>{busy ? "Adding…" : "Add"}</button></form><div className="admin-user-list">{users.map((user) => <div className="admin-user-row" key={user.id}><div className="avatar small-avatar">{initials(user.name || user.email)}</div><div className="user-details"><strong>{user.name || user.email}</strong><small>{user.email}</small></div><span className={`role-label ${user.role}`}>{user.role}</span><button className={`toggle-button${user.enabled ? " enabled" : ""}`} onClick={() => void toggleUser(user)} aria-label={`${user.enabled ? "Disable" : "Enable"} ${user.email}`} title={user.enabled ? "Disable access" : "Enable access"}><span /></button></div>)}{!users.length && <p className="muted-copy">No accounts</p>}</div></div>
       <details className="admin-detail audit-card"><summary>Activity</summary>{events.length ? <div className="audit-list">{events.map((item) => <div className="audit-row" key={item.id}><span className="audit-dot" /><div><strong>{item.action.replaceAll("_", " ")}</strong><small>{item.actorEmail || "System"} · {new Date(item.createdAt).toLocaleString()}</small></div></div>)}</div> : <p className="muted-copy">No activity</p>}</details>
       <details className="admin-detail integration-card"><summary>Connections</summary><div className="integration-list">{(["Google sign-in", "Private media uploads", "Instagram publishing"] as const).map((label, index) => { const ready = integrations ? [integrations.googleConfigured, integrations.uploadsConfigured, integrations.instagramConfigured][index] : false; return <div className="integration-row" key={label}><span className={`integration-dot${ready ? " ready" : ""}`} /><strong>{label}</strong><small>{integrations ? ready ? "Configured" : "Needs setup" : "Checking…"}</small></div>; })}</div><p className="muted-copy">Configuration status. Live connections may require verification.</p></details></div>
   </section>;

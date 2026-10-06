@@ -17,6 +17,7 @@ beforeEach(async () => {
     testEnv.DB.prepare("DELETE FROM publications"),
     testEnv.DB.prepare("DELETE FROM sessions"),
     testEnv.DB.prepare("DELETE FROM oauth_transactions"),
+    testEnv.DB.prepare("DELETE FROM integration_oauth"),
     testEnv.DB.prepare("DELETE FROM rate_limits"),
     testEnv.DB.prepare("DELETE FROM users"),
     testEnv.DB.prepare("DELETE FROM app_settings"),

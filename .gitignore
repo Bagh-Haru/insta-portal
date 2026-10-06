@@ -9,3 +9,6 @@ dist/
 *.local
 coverage/
 .DS_Store
+public/media-engine/
+test-results/
+playwright-report/

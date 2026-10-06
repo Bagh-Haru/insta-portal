@@ -14,6 +14,9 @@ export type Env = {
   META_ACCESS_TOKEN: string;
   META_IG_USER_ID: string;
   META_API_VERSION: string;
+  META_FACEBOOK_APP_ID?: string;
+  META_FACEBOOK_APP_SECRET?: string;
+  META_LOGIN_MODE?: "instagram" | "facebook";
   MEDIA_URL_SECRET: string;
   R2_ACCOUNT_ID: string;
   R2_ACCESS_KEY_ID: string;
@@ -45,6 +48,7 @@ export type MediaRow = {
   size_bytes: number;
   position: number;
   media_url_expires_at: number | null;
+  creative_json?: string;
 };
 
 export type PublicationRow = {
@@ -58,4 +62,7 @@ export type PublicationRow = {
   publish_data_json: string;
   poll_attempts: number;
   publish_attempted_at: number | null;
+  retry_attempts: number;
+  next_attempt_at: number | null;
+  creative_json?: string;
 };
